@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { approve, getConfig, startRun, streamRun, type Config, type Mode } from "./api";
-import { ClientView } from "./components/ClientView";
+import { ClientView, useChat } from "./components/ClientView";
 import { ComplianceView } from "./components/ComplianceView";
 import { ObservabilityStrip } from "./components/ObservabilityStrip";
 import { RelationshipManagerView } from "./components/RelationshipManagerView";
@@ -13,6 +13,7 @@ type Persona = "client" | "relationship_manager" | "compliance" | "engineering";
 
 export function App() {
   const [state, dispatch] = useReducer(runReducer, initialState);
+  const chat = useChat();
   const [config, setConfig] = useState<Config | null>(null);
   const [persona, setPersona] = useState<Persona>("engineering");
   const [mode, setMode] = useState<Mode>("live");
@@ -76,7 +77,7 @@ export function App() {
 
       {(error || state.status === "failed") && <div className="error">{error || state.error}</div>}
 
-      {persona === "client" && <main className="main-single"><ClientView state={state} /></main>}
+      {persona === "client" && <main className="main-single"><ClientView state={state} chat={chat} /></main>}
       {persona === "relationship_manager" && <main className="main-single"><RelationshipManagerView state={state} /></main>}
       {persona === "compliance" && <main className="main-single"><ComplianceView state={state} onApprove={onApprove} /></main>}
       {persona === "engineering" && (

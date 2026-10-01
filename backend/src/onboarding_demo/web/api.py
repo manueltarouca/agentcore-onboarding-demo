@@ -4,6 +4,7 @@ POST /api/runs                 start a run: "live" (AgentCore Runtime) or "repla
 GET  /api/runs/{id}/events     the run's events as Server-Sent Events
 POST /api/runs/{id}/approve    the compliance officer's decision
 GET  /api/config               personas and AWS console links
+POST /api/chat                 one message from the client to the agent; returns what the agent did
 
 A live run is two invocations of the same Runtime session: first as the relationship
 manager, then, after approval, as the compliance officer.
@@ -24,6 +25,7 @@ from onboarding_demo.workflow.runner import describe_steps
 
 RELATIONSHIP_MANAGER = "rita.almeida"
 COMPLIANCE_OFFICER = "compliance.officer"
+CLIENT = "lusitania.client"
 PERSONAS = [
     {"id": "client", "label": "Client", "user": "Lusitania Holdings SGPS"},
     {"id": "relationship_manager", "label": "Relationship manager", "user": "Rita Almeida"},
@@ -45,6 +47,11 @@ class Auth(Protocol):
 class RunRequest(BaseModel):
     mode: Literal["live", "replay"] = "replay"
     speed: float = 1.0
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
 
 
 class Run:
@@ -81,6 +88,14 @@ def create_app(runtime: Runtime, auth: Auth, outputs: dict, replay_file: Path, s
         run_id = uuid.uuid4().hex[:10]
         runs[run_id] = Run(request.mode, request.speed)
         return {"run_id": run_id}
+
+    @app.post("/api/chat")
+    async def chat(request: ChatRequest) -> dict:
+        """One chat turn, as the client. The Runtime session (and Memory session) is the conversation."""
+        session_id = request.session_id or f"client-chat-{uuid.uuid4().hex}"
+        token = await auth.sign_in(CLIENT)
+        events = [e async for e in runtime.invoke(token, session_id, {"action": "chat", "message": request.message})]
+        return {"session_id": session_id, "events": events}
 
     @app.post("/api/runs/{run_id}/approve", status_code=204)
     def approve(run_id: str) -> None:

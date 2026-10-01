@@ -16,6 +16,7 @@ runtime = RuntimeClient(region, outputs["RuntimeArn"])
 auth = CognitoAuth(region, outputs["UserPoolClientId"], {
     "rita.almeida": outputs["PasswordSecretRita"],
     "compliance.officer": outputs["PasswordSecretCompliance"],
+    "lusitania.client": outputs["PasswordSecretLusitania"],
 })
 app = create_app(
     runtime=runtime,

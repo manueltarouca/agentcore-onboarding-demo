@@ -16,6 +16,9 @@ Open the app and, in a second tab, the AWS console.
 | 8 | **Trace** tab, then the CloudWatch link | Every call, with tokens and cost |
 | 9 | One or two **Open in AWS console** links (Policy, Memory) | This is where it lives in your account |
 
+**Client chat** (Client tab, needs Live AWS): click *What do you still need from us?*, then
+*Can you just approve our account today?*. Point at the red Policy row in *What the agent did*.
+
 If a live run fails, switch to **Replay**: it plays the last completed live run.
 
 ## Short replay (2 minutes)

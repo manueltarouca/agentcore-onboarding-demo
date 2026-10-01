@@ -22,6 +22,18 @@ Every step uses one AgentCore primitive, end to end, in your own AWS account.
 The agent runs on **AgentCore Runtime**. All model and tool calls are traced with
 **AgentCore Observability**.
 
+## The client's chat
+
+The Client tab also has a chat assistant. Each message is one call to the same Runtime, as the
+client (their own Cognito user):
+
+- **Memory** keeps the conversation: each reply reads the earlier messages and saves the new ones.
+- **Gateway** gives the assistant two client tools: `case_status` and `book_callback`.
+- **Policy** decides with the client's identity. Ask it to approve the account and the Gateway
+  denies the call: approval is for bank staff only, whatever the agent claims the risk is.
+
+Next to the chat, *What the agent did* lists the AgentCore calls behind each reply.
+
 ## How it fits together
 
 ```

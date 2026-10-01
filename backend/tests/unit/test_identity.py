@@ -24,3 +24,11 @@ def test_compliance_role_comes_from_the_group_not_the_name():
     caller = caller_from_headers({"authorization": f"Bearer {access}"})
 
     assert caller.role == "Compliance"
+
+
+def test_a_client_is_never_treated_as_bank_staff():
+    access = token({"username": "lusitania.client", "cognito:groups": ["clients"]})
+
+    caller = caller_from_headers({"Authorization": f"Bearer {access}"})
+
+    assert (caller.name, caller.role) == ("Lusitania Holdings SGPS", "Client")

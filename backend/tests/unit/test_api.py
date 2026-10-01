@@ -108,3 +108,22 @@ def test_the_page_is_never_cached_so_a_new_build_shows_up_immediately(tmp_path):
     response = TestClient(app).get("/")
 
     assert response.headers["cache-control"] == "no-store"
+
+
+class ChatRuntime(FakeRuntime):
+    async def invoke(self, token: str, session_id: str, payload: dict):
+        self.calls.append((token, session_id, payload["action"], payload.get("message")))
+        yield {"type": "memory_read", "at": 0, "step": "chat", "turns": 0}
+        yield {"type": "chat_reply", "at": 1, "step": "chat", "text": "Hello"}
+
+
+def test_chat_signs_in_as_the_client_and_keeps_one_session_per_conversation(tmp_path):
+    client, runtime = make_client(tmp_path, ChatRuntime())
+
+    first = client.post("/api/chat", json={"message": "Hi"}).json()
+    second = client.post("/api/chat", json={"message": "Again", "session_id": first["session_id"]}).json()
+
+    assert [e["type"] for e in first["events"]] == ["memory_read", "chat_reply"]
+    assert runtime.calls[0][0] == "token-for-lusitania.client"
+    assert runtime.calls[1][1] == first["session_id"] == second["session_id"]
+    assert len(first["session_id"]) >= 33

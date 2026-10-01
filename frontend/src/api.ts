@@ -40,3 +40,15 @@ export type Config = {
 export async function getConfig(): Promise<Config> {
   return (await fetch("api/config")).json();
 }
+
+export type ChatTurn = { session_id: string; events: import("./state/chatActivity").ChatEvent[] };
+
+export async function sendChat(message: string, sessionId: string | null): Promise<ChatTurn> {
+  const response = await fetch("api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+  if (!response.ok) throw new Error(`Chat failed (${response.status})`);
+  return response.json();
+}

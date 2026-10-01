@@ -78,6 +78,13 @@ class Model(Protocol):
     async def ask(self, system: str, prompt: str) -> ModelReply: ...
 
 
+class ChatModel(Protocol):
+    """A model that holds a conversation and may call the given tools (async functions)."""
+
+    async def converse(self, system: str, history: list[tuple[str, str]], message: str,
+                       tools: list) -> ModelReply: ...
+
+
 class Memory(Protocol):
     async def conversation(self, session_id: str) -> list[tuple[str, str]]: ...
     async def save_turn(self, session_id: str, role: str, text: str) -> None: ...

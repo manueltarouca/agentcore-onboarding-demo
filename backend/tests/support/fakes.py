@@ -47,13 +47,38 @@ class FakeMemory:
 
 
 class FakeTools:
-    """Mirrors the Cedar policy on the Gateway: approval for low risk, or by compliance."""
+    """Mirrors the Cedar policies on the Gateway (infra/stack.py)."""
+
+    STAFF_TOOLS = {"registry_lookup", "screen_person", "create_compliance_case"}
 
     async def call(self, name: str, arguments: dict, caller: Caller) -> ToolResult:
-        allowed = arguments.get("risk") == "low" or caller.role == "Compliance"
-        if name == "approve_customer" and not allowed:
+        staff = caller.role != "Client"
+        if name == "approve_customer":
+            allowed = caller.role == "Compliance" or (staff and arguments.get("risk") == "low")
+        else:
+            allowed = staff or name not in self.STAFF_TOOLS
+        if not allowed:
             raise PolicyDenied(name, "Tool call not allowed due to policy enforcement")
         return ToolResult(name, arguments, bank_tools.TOOLS[name](**arguments))
+
+
+class FakeChatModel:
+    """Calls tools the way a model would for two kinds of question, then answers from the results."""
+
+    def __init__(self):
+        self.histories: list[list[tuple[str, str]]] = []
+
+    async def converse(self, system: str, history, message: str, tools: list) -> ModelReply:
+        self.histories.append(list(history))
+        by_name = {t.__name__: t for t in tools}
+        if "approve" in message.lower():
+            result = await by_name["approve_customer"](risk="medium")
+            text = ("I can't approve accounts myself: a person at the bank makes that decision."
+                    if "error" in result else "Your account is approved.")
+        else:
+            status = await by_name["case_status"]()
+            text = f"We still need: {', '.join(status['documents_needed'])}."
+        return ModelReply(text=text, input_tokens=400, output_tokens=40, latency_ms=800, model_id="fake-sonnet")
 
 
 class FakeBrowser:

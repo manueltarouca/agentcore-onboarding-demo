@@ -5,6 +5,10 @@ Two actions, both in the same Runtime session:
     {"action": "start"}    as the relationship manager: steps 1 to 6, then waits
     {"action": "approve"}  as the compliance officer: steps 7 to 10
 
+And one for the client's chat, one message per call:
+
+    {"action": "chat", "message": "..."}   as the client; the conversation lives in Memory
+
 Between the two calls the workflow object stays in this process. AgentCore Runtime keeps
 each session in its own microVM, so the second call lands where the first one left off.
 """
@@ -13,7 +17,7 @@ import os
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp, RequestContext
 
-from onboarding_demo.adapters.aws import aws_dependencies
+from onboarding_demo.adapters.aws import aws_dependencies, client_chat
 from onboarding_demo.agent.identity import caller_from_headers
 from onboarding_demo.case import LUSITANIA
 from onboarding_demo.workflow.events import event
@@ -40,6 +44,10 @@ async def invoke(payload: dict, context: RequestContext):
                 yield event("error", message="No paused case in this session")
                 return
             async for e in workflow.approve(caller):
+                yield e
+        elif action == "chat":
+            chat = client_chat(actor_id=caller.username, case_id=LUSITANIA.case_id)
+            async for e in chat.reply(caller, context.session_id, payload.get("message", "")):
                 yield e
         else:
             yield event("error", message=f"Unknown action {action!r}")

@@ -276,3 +276,48 @@ button.primary-waiting { background: var(--amber); }
 .portal-request { margin-top: 28px; padding: 20px 22px; background: #ffffff; border: 1px solid #e3e6ec; border-radius: 10px; }
 .portal-request h3 { margin: 0 0 10px; font-size: 15px; }
 .portal-request ul { margin: 0; padding-left: 18px; color: #3d4350; font-size: 14px; line-height: 1.7; }
+
+/* ---------- client chat ---------- */
+.client-layout { display: grid; grid-template-columns: minmax(0, 720px) 400px; gap: 24px; justify-content: center;
+  padding: 28px 24px; overflow: hidden; min-height: 0; }
+.portal-chat { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 190px); }
+.portal-status { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 18px 28px;
+  border-bottom: 1px solid #e3e6ec; }
+.portal-headline-small { margin: 0; font-size: 20px; font-weight: 650; }
+.portal-needed { margin: 0; font-size: 13px; color: #5b6272; text-align: right; max-width: 55%; }
+.chat-log { flex: 1; overflow-y: auto; padding: 20px 28px; display: flex; flex-direction: column; gap: 10px; min-height: 220px; }
+.chat-empty { margin: auto; color: #8a90a2; font-size: 14px; }
+.bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; animation: rise 0.25s ease-out; }
+.bubble-user { align-self: flex-end; background: #1a1d24; color: #fff; border-bottom-right-radius: 4px; }
+.bubble-assistant { align-self: flex-start; background: #fff; color: #1a1d24; border: 1px solid #e3e6ec;
+  border-bottom-left-radius: 4px; cursor: pointer; }
+.bubble-selected { border-color: #6b3fd4; box-shadow: 0 0 0 2px rgba(107, 63, 212, 0.15); }
+.bubble-typing { display: flex; gap: 4px; cursor: default; }
+.bubble-typing span { width: 6px; height: 6px; border-radius: 50%; background: #8a90a2; animation: blink 1s infinite; }
+.bubble-typing span:nth-child(2) { animation-delay: 0.2s; }
+.bubble-typing span:nth-child(3) { animation-delay: 0.4s; }
+.chat-error { margin: 0 28px 8px; color: #c4314b; font-size: 13px; }
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 28px 12px; }
+.chat-suggestions button { background: #fff; border: 1px solid #d6dae2; color: #3d4350; border-radius: 99px;
+  padding: 6px 12px; font-size: 12.5px; }
+.chat-suggestions button:hover:not(:disabled) { border-color: #6b3fd4; color: #6b3fd4; }
+.chat-input { display: flex; gap: 8px; padding: 14px 28px 20px; border-top: 1px solid #e3e6ec; background: #fff; }
+.chat-input input { flex: 1; border: 1px solid #d6dae2; border-radius: 8px; padding: 10px 12px; font-size: 14px; color: #1a1d24; background: #fff; }
+.chat-input input:focus { outline: 2px solid rgba(107, 63, 212, 0.35); border-color: #6b3fd4; }
+.chat-input button { background: #1a1d24; color: #fff; border: 0; border-radius: 8px; padding: 0 18px; font-size: 14px; }
+.chat-input button:disabled { opacity: 0.4; }
+.activity { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px;
+  display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: calc(100vh - 190px); }
+.activity h3 { margin: 0 0 4px; font-size: 15px; }
+.activity-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.activity-row { display: grid; grid-template-columns: 76px 1fr; column-gap: 10px; row-gap: 2px; padding: 10px 12px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; opacity: 0; animation: rise 0.3s ease-out forwards; }
+.activity-primitive { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--purple); font-weight: 600; padding-top: 2px; }
+.activity-text { font-size: 13px; }
+.activity-note { grid-column: 2; font-size: 12px; color: var(--muted); }
+.activity-allow .activity-note { color: var(--teal); }
+.activity-deny { border-color: rgba(255, 90, 106, 0.6); background: rgba(255, 90, 106, 0.08); }
+.activity-deny .activity-primitive, .activity-deny .activity-note { color: var(--red); }
+.activity-footnote { margin-top: auto; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }

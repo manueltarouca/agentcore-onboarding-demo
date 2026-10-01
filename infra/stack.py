@@ -1,6 +1,6 @@
 """Everything the onboarding agent needs in AWS, in one stack.
 
-    Cognito            who the users are (relationship manager, compliance officer)
+    Cognito            who the users are (relationship manager, compliance officer, client)
     Lambda             the bank's own systems, exposed as tools
     Gateway + Policy   turns the Lambda into MCP tools and decides who may call what
     Memory             short and long-term memory for the agent
@@ -31,7 +31,9 @@ EVALUATORS = "Builtin.GoalSuccessRate,Builtin.Helpfulness"
 USERS = {
     "rita.almeida": "relationship-managers",
     "compliance.officer": "compliance",
+    "lusitania.client": "clients",
 }
+STAFF = '["rita.almeida", "compliance.officer"]'  # Cedar set: bank staff, never the client
 
 
 class OnboardingStack(Stack):
@@ -190,12 +192,18 @@ class OnboardingStack(Stack):
              AgentCore::Action::"bank___screen_person",
              AgentCore::Action::"bank___create_compliance_case"],
   resource == {gateway}
+) when {{ principal.hasTag("username") && {STAFF}.contains(principal.getTag("username")) }};""",
+            "client_tools": f"""permit(
+  principal is AgentCore::OAuthUser,
+  action in [AgentCore::Action::"bank___case_status",
+             AgentCore::Action::"bank___book_callback"],
+  resource == {gateway}
 );""",
             "approve_low_risk": f"""permit(
   principal is AgentCore::OAuthUser,
   action == AgentCore::Action::"bank___approve_customer",
   resource == {gateway}
-) when {{ context.input.risk == "low" }};""",
+) when {{ context.input.risk == "low" && principal.hasTag("username") && {STAFF}.contains(principal.getTag("username")) }};""",
             "approve_by_compliance": f"""permit(
   principal is AgentCore::OAuthUser,
   action == AgentCore::Action::"bank___approve_customer",

@@ -8,8 +8,10 @@ import json
 
 from onboarding_demo.workflow.ports import Caller
 
-DISPLAY_NAMES = {"rita.almeida": "Rita Almeida", "compliance.officer": "Compliance officer"}
+DISPLAY_NAMES = {"rita.almeida": "Rita Almeida", "compliance.officer": "Compliance officer",
+                 "lusitania.client": "Lusitania Holdings SGPS"}
 COMPLIANCE_GROUP = "compliance"
+CLIENT_GROUP = "clients"
 
 
 def caller_from_headers(headers: dict[str, str]) -> Caller:
@@ -18,7 +20,8 @@ def caller_from_headers(headers: dict[str, str]) -> Caller:
     claims = _claims(token)
     username = claims.get("username", claims.get("sub", "unknown"))
     groups = claims.get("cognito:groups", [])
-    role = "Compliance" if COMPLIANCE_GROUP in groups else "Relationship manager"
+    role = ("Client" if CLIENT_GROUP in groups
+            else "Compliance" if COMPLIANCE_GROUP in groups else "Relationship manager")
     return Caller(name=DISPLAY_NAMES.get(username, username), role=role, token=token, username=username)
 
 

@@ -17,7 +17,7 @@ from bedrock_agentcore.evaluation import fetch_spans_from_cloudwatch
 from bedrock_agentcore.memory import MemoryClient
 from bedrock_agentcore.tools.browser_client import BrowserClient
 from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
-from strands import Agent
+from strands import Agent, tool
 from strands.models import BedrockModel
 
 from onboarding_demo.adapters.aws.naming import memory_actor_id
@@ -58,6 +58,24 @@ class StrandsModel:
         )
 
 
+class StrandsChatModel:
+    """A Strands agent for one chat turn: the history from Memory, the tools from our Gateway calls."""
+
+    def __init__(self, model_id: str):
+        self.model_id = model_id
+
+    async def converse(self, system: str, history: list[tuple[str, str]], message: str, tools: list) -> ModelReply:
+        messages = [{"role": role, "content": [{"text": text}]} for role, text in history]
+        agent = Agent(model=BedrockModel(model_id=self.model_id, region_name=REGION), system_prompt=system,
+                      messages=messages, tools=[tool(t) for t in tools], callback_handler=None)
+        started = time.monotonic()
+        result = await agent.invoke_async(message)
+        usage = result.metrics.accumulated_usage
+        return ModelReply(text=str(result).strip(), input_tokens=usage.get("inputTokens", 0),
+                          output_tokens=usage.get("outputTokens", 0),
+                          latency_ms=round((time.monotonic() - started) * 1000), model_id=self.model_id)
+
+
 class AgentCoreMemory:
     """Short-term memory: the conversation events of this session.
     Long-term memory: records the strategies extracted for this person, across sessions."""
@@ -68,15 +86,16 @@ class AgentCoreMemory:
         "Episodic": "/onboarding/{actor}/episodes/",
     }
 
-    def __init__(self, memory_id: str, actor_id: str):
+    def __init__(self, memory_id: str, actor_id: str, seed: bool = True):
         self.client = MemoryClient(region_name=REGION)
         self.memory_id = memory_id
         self.actor_id = memory_actor_id(actor_id)
+        self.seed = seed  # the onboarding case starts from what the relationship manager already said
 
     async def conversation(self, session_id: str) -> list[tuple[str, str]]:
         events = await asyncio.to_thread(self.client.list_events, memory_id=self.memory_id,
                                          actor_id=self.actor_id, session_id=session_id)
-        if not events:  # first visit: store what the relationship manager already told us
+        if not events and self.seed:  # first visit: store what the relationship manager already told us
             for role, text in LUSITANIA.conversation:
                 await self.save_turn(session_id, role, text)
             events = await asyncio.to_thread(self.client.list_events, memory_id=self.memory_id,
@@ -272,4 +291,18 @@ def aws_dependencies(actor_id: str) -> Dependencies:
         sandbox=AgentCoreSandbox(),
         evaluator=AgentCoreEvaluator(runtime_log_group(env("RUNTIME_NAME")), env("EVALUATOR_IDS").split(",")),
         registry=AgentCoreRegistry(gateway_url),
+    )
+
+
+def client_chat(actor_id: str, case_id: str):
+    from onboarding_demo.workflow.chat import ClientChat
+
+    gateway_url = env("GATEWAY_URL").rstrip("/")
+    if not gateway_url.endswith("/mcp"):
+        gateway_url += "/mcp"
+    return ClientChat(
+        model=StrandsChatModel(os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-6")),
+        memory=AgentCoreMemory(env("MEMORY_ID"), actor_id, seed=False),
+        tools=GatewayTools(gateway_url, env("GATEWAY_TARGET")),
+        case_id=case_id,
     )

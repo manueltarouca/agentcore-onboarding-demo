@@ -1,0 +1,22 @@
+[
+  {
+    "name": "registry_lookup",
+    "description": "Look up a company in the commercial registry by its company number.",
+    "inputSchema": {"type": "object", "properties": {"company_number": {"type": "string"}}, "required": ["company_number"]}
+  },
+  {
+    "name": "screen_person",
+    "description": "Screen a person against politically exposed person (PEP) and sanctions lists.",
+    "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
+  },
+  {
+    "name": "create_compliance_case",
+    "description": "Open a case in the compliance review queue.",
+    "inputSchema": {"type": "object", "properties": {"case_id": {"type": "string"}, "reason": {"type": "string"}}, "required": ["case_id", "reason"]}
+  },
+  {
+    "name": "approve_customer",
+    "description": "Approve a business customer. Guarded by AgentCore Policy.",
+    "inputSchema": {"type": "object", "properties": {"case_id": {"type": "string"}, "risk": {"type": "string"}}, "required": ["case_id", "risk"]}
+  }
+]

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+frontend/dist/
+.env
+*.local.json
+.DS_Store
+cdk.out/
+infra/outputs.json
+recordings/

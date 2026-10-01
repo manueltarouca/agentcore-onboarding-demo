@@ -1,14 +1,16 @@
 """The client's chat with the bank's agent, one message at a time.
 
-Each reply reads the conversation from Memory, lets the model call Gateway tools with the
-client's own token, and saves the new turn. Policy decides what the client's agent may do:
-it can read the case status and book a call, but it can never approve the account.
+Each reply reads the conversation from Memory, lets the model call Gateway tools, and saves the
+new turn. Reading the case and booking a call use the client's own token. Approval uses the
+agent's own identity and the bank's risk assessment, so Policy approves a low-risk client and
+refuses the rest, whatever the client or the model says.
 """
 from collections.abc import AsyncIterator
 
+from onboarding_demo.bank_tools import assessed_risk
 from onboarding_demo.pricing import estimate_cost
 from onboarding_demo.workflow.events import event
-from onboarding_demo.workflow.ports import Caller, ChatModel, Memory, PolicyDenied, Tools
+from onboarding_demo.workflow.ports import AgentIdentity, Caller, ChatModel, Memory, PolicyDenied, Tools
 
 STEP = "chat"
 SYSTEM = (
@@ -16,19 +18,20 @@ SYSTEM = (
     "application. Use the tools to answer. Be brief and friendly: plain text, at most three sentences, "
     "no markdown, no lists, no dashes. "
     "Never mention screening, risk ratings, politically exposed persons or internal reviews. "
-    # Deliberate for the demo: the agent tries, and AgentCore Policy (outside the model) decides.
-    "If the client asks you to approve the account, call approve_customer (use risk \"low\" if you do not "
-    "know it). If a tool is not allowed, say that a person at the bank makes that decision."
+    "If the client asks you to approve the account, call approve_customer: the bank's policy decides. "
+    "If it is approved, say the account is approved. "
+    "If it is not allowed, say that a person at the bank makes that decision."
 )
 DENIED = {"error": "Not allowed. A person at the bank makes this decision."}
 
 
 class ClientChat:
-    def __init__(self, model: ChatModel, memory: Memory, tools: Tools, case_id: str):
+    def __init__(self, model: ChatModel, memory: Memory, tools: Tools, case_id: str, identity: AgentIdentity):
         self.model = model
         self.memory = memory
         self.tools = tools
         self.case_id = case_id
+        self.identity = identity
 
     async def reply(self, caller: Caller, session_id: str, message: str) -> AsyncIterator[dict]:
         pending: list[dict] = []
@@ -50,17 +53,17 @@ class ClientChat:
     def _tools(self, caller: Caller, pending: list[dict]) -> list:
         case_id = self.case_id
 
-        async def call(name: str, arguments: dict) -> dict:
+        async def call(name: str, arguments: dict, as_caller: Caller = caller) -> dict:
             try:
-                result = await self.tools.call(name, arguments, caller)
+                result = await self.tools.call(name, arguments, as_caller)
             except PolicyDenied as denied:
                 pending.append(event("policy_decision", step=STEP, tool=name, arguments=arguments,
-                                     decision="DENY", reason=denied.reason, caller=caller.name))
+                                     decision="DENY", reason=denied.reason, caller=as_caller.name))
                 return DENIED
             pending.append(event("policy_decision", step=STEP, tool=name, arguments=arguments,
-                                 decision="ALLOW", reason="", caller=caller.name))
+                                 decision="ALLOW", reason="", caller=as_caller.name))
             pending.append(event("tool_call", step=STEP, tool=name, arguments=arguments,
-                                 output=result.output, caller=caller.name))
+                                 output=result.output, caller=as_caller.name))
             return result.output
 
         async def case_status() -> dict:
@@ -71,8 +74,9 @@ class ClientChat:
             """Book a call with the client's relationship manager about a topic."""
             return await call("book_callback", {"case_id": case_id, "topic": topic})
 
-        async def approve_customer(risk: str) -> dict:
-            """Approve the client's account. Risk is the case's risk level: low, medium or high."""
-            return await call("approve_customer", {"case_id": case_id, "risk": risk})
+        async def approve_customer() -> dict:
+            """Ask the bank to approve the client's account. The bank's policy decides."""
+            agent = await self.identity.caller()  # the agent's own identity, not the client's
+            return await call("approve_customer", {"case_id": case_id, "risk": assessed_risk(case_id)}, agent)
 
         return [case_status, book_callback, approve_customer]

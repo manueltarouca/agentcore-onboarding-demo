@@ -76,7 +76,7 @@ class FakeChatModel:
         self.histories.append(list(history))
         by_name = {t.__name__: t for t in tools}
         if "approve" in message.lower():
-            result = await by_name["approve_customer"](risk="medium")
+            result = await by_name["approve_customer"]()
             text = ("I can't approve accounts myself: a person at the bank makes that decision."
                     if "error" in result else "Your account is approved.")
         else:

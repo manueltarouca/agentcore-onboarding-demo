@@ -90,7 +90,9 @@ docs/      walkthrough, presenter guide, what is real, screenshots
 ## Run the tests
 
 ```bash
-cd backend && uv run pytest          # domain, workflow, identity, web API
+cd backend && uv run pytest          # domain, workflow, identity, web API (no AWS calls)
+# against the deployed stack, with the web app running (real AWS calls, a few cents):
+cd backend && E2E_BASE_URL=http://localhost:8000 uv run pytest tests/e2e -v
 cd frontend && npm install && npm test
 ```
 

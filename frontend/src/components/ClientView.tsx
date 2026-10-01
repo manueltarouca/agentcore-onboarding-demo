@@ -109,7 +109,7 @@ export function ClientView({ state, chat, caseInfo }: { state: RunState; chat: C
           </ol>
         )}
         <p className="activity-footnote muted small">
-          The assistant acts with the client's own sign-in. Policy lets it read the case and book a call, never approve.
+          Reading the case and booking a call use the client's sign-in. Approval uses the agent's own identity, and Policy decides.
         </p>
       </aside>
     </div>

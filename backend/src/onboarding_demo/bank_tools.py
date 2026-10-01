@@ -5,6 +5,8 @@ the fake gateway used by tests, so both behave the same way.
 """
 from onboarding_demo.case import CASES
 from onboarding_demo.domain.documents import missing_documents
+from onboarding_demo.domain.ownership import beneficial_owners, effective_ownership, people_only
+from onboarding_demo.domain.risk import ScreeningResult, classify
 
 REGISTRY_DETAILS = {
     "500000000": {"legal_form": "SGPS (holding company)", "registered_office": "Lisbon", "status": "Active",
@@ -70,6 +72,15 @@ def book_callback(case_id: str, topic: str) -> dict:
     manager = CLIENT_CASES.get(case_id, {}).get("relationship_manager", "your relationship manager")
     return {"reference": f"CB-{abs(hash((case_id, topic))) % 10000:04d}", "with": manager,
             "topic": topic, "when": "Next business day, 10:00"}
+
+
+def assessed_risk(case_id: str) -> str:
+    """The bank's own risk assessment of a case, from its records. Internal: not a tool, never shown
+    to the client. The chat uses it so the risk sent to Policy is never the model's guess."""
+    case = CASES[case_id]
+    holdings = list(case.holdings)
+    owners = beneficial_owners(people_only(effective_ownership(holdings, case.company), holdings))
+    return str(classify([ScreeningResult(p, pep=p in PEP_LIST, sanctioned=p in SANCTIONS_LIST) for p in owners]))
 
 
 TOOLS = {

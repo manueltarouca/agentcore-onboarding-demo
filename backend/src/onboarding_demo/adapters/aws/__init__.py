@@ -139,6 +139,8 @@ class GatewayTools:
                                        headers={"Authorization": f"Bearer {caller.token}"})
         body = response.json()
         error = body.get("error") or {}
+        if isinstance(error, str):  # some failures come back as a plain message, not a JSON-RPC error
+            error = {"message": error}
         result = body.get("result") or {}
         text = " ".join(c.get("text", "") for c in result.get("content", []))
         message = error.get("message", "") or (text if result.get("isError") else "")
@@ -325,4 +327,5 @@ def client_chat(actor_id: str, case_id: str):
         memory=AgentCoreMemory(env("MEMORY_ID"), actor_id),
         tools=GatewayTools(gateway_url, env("GATEWAY_TARGET")),
         case_id=case_id,
+        identity=AgentCoreIdentity(env("AGENT_IDENTITY_PROVIDER"), env("AGENT_SCOPE")),
     )

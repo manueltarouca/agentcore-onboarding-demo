@@ -10,7 +10,7 @@ export function activityRows(events: ChatEvent[]): ActivityRow[] {
         return [{ primitive: "Memory", text: e.turns ? `Read ${e.turns} earlier messages` : "New conversation" }];
       case "policy_decision": {
         const allowed = e.decision === "ALLOW";
-        return [{ primitive: "Policy", text: String(e.tool), tone: allowed ? "allow" : "deny",
+        return [{ primitive: "Policy", text: `${e.tool}${argumentsShown(e.arguments)}`, tone: allowed ? "allow" : "deny",
                   note: `${e.decision} as ${e.caller}` }];
       }
       case "tool_call":
@@ -26,4 +26,10 @@ export function activityRows(events: ChatEvent[]): ActivityRow[] {
         return [];
     }
   });
+}
+
+// The arguments that matter to the decision. The case id is always the client's own, so it is left out.
+function argumentsShown(args: unknown): string {
+  const shown = Object.entries((args ?? {}) as Record<string, unknown>).filter(([k]) => k !== "case_id");
+  return shown.length ? `(${shown.map(([k, v]) => `${k}=${v}`).join(", ")})` : "";
 }

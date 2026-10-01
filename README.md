@@ -34,6 +34,8 @@ client (their own Cognito user):
 
 Next to the chat, *What the agent did* lists the AgentCore calls behind each reply.
 
+![Client chat: Policy denies the approval](docs/screenshots/12-client-chat-policy-deny.png)
+
 ## How it fits together
 
 ```

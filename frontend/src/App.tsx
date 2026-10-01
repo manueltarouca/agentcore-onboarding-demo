@@ -99,7 +99,7 @@ export function App() {
         </main>
       )}
 
-      <ObservabilityStrip state={state} elapsedMs={elapsed.ms} />
+      {persona !== "client" && <ObservabilityStrip state={state} elapsedMs={elapsed.ms} />}
     </div>
   );
 }

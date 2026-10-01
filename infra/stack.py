@@ -73,13 +73,14 @@ class OnboardingStack(Stack):
                 policy_engine=policy_engine, mode=agentcore.PolicyEngineMode.ENFORCE),
             exception_level=agentcore.GatewayExceptionLevel.DEBUG,
         )
-        gateway.add_lambda_target(
+        bank_target = gateway.add_lambda_target(
             "BankTarget", gateway_target_name="bank", lambda_function=tools_function,
             tool_schema=agentcore.ToolSchema.from_local_asset(str(ROOT / "infra" / "tool_schema.json")),
         )
         for name, cedar in self._policies(gateway.gateway_arn).items():
-            agentcore.Policy(self, f"Policy{name}", policy_engine=policy_engine, policy_name=f"{PREFIX}_{name}",
-                             statement=agentcore.PolicyStatement.from_cedar(cedar))
+            policy = agentcore.Policy(self, f"Policy{name}", policy_engine=policy_engine,
+                                      policy_name=f"{PREFIX}_{name}", statement=agentcore.PolicyStatement.from_cedar(cedar))
+            policy.node.add_dependency(bank_target)  # Cedar is checked against the target's tool names
 
         # ---- Memory ------------------------------------------------------------------------
         memory = agentcore.Memory(

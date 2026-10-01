@@ -149,6 +149,26 @@ class GatewayTools:
         return ToolResult(name, arguments, json.loads(text))
 
 
+class AgentCoreIdentity:
+    """The agent's own identity. AgentCore Identity gets an OAuth token for the agent's Cognito app
+    client (client credentials), using the workload token AgentCore Runtime gives each invocation."""
+
+    NAME = "Onboarding agent"
+
+    def __init__(self, provider_name: str, scope: str):
+        self.provider_name = provider_name
+        self.scope = scope
+
+    async def caller(self) -> Caller:
+        from bedrock_agentcore.runtime.context import BedrockAgentCoreContext
+        from bedrock_agentcore.services.identity import IdentityClient
+
+        token = await IdentityClient(REGION).get_token(
+            provider_name=self.provider_name, scopes=[self.scope], auth_flow="M2M",
+            agent_identity_token=BedrockAgentCoreContext.get_workload_access_token())
+        return Caller(name=self.NAME, role="Agent", token=token, username="onboarding-agent")
+
+
 class AgentCoreBrowser:
     """A managed Chromium session in AgentCore Browser, driven over CDP with Playwright."""
 
@@ -290,6 +310,7 @@ def aws_dependencies(actor_id: str, conversation: tuple[tuple[str, str], ...] = 
         sandbox=AgentCoreSandbox(),
         evaluator=AgentCoreEvaluator(runtime_log_group(env("RUNTIME_NAME")), env("EVALUATOR_IDS").split(",")),
         registry=AgentCoreRegistry(gateway_url),
+        identity=AgentCoreIdentity(env("AGENT_IDENTITY_PROVIDER"), env("AGENT_SCOPE")),
     )
 
 

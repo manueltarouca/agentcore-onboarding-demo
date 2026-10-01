@@ -33,7 +33,10 @@ everything else (agent, bank tools, chat, web app, UI, infrastructure) reads the
 | Douro Ceramics Lda | Two people, both clear | Low | Policy allows the agent's approval; the run finishes in one invocation, no human step |
 
 The rule that makes the difference is one Cedar policy, `approve_low_risk` in `infra/stack.py`:
-the agent may approve when `risk == "low"` and it acts for bank staff. To add a case, add an entry
+the caller's token must carry the agent's own OAuth scope (`onboarding/approve.low_risk`) and
+`risk` must be `"low"`. The agent gets that token with its own identity: a Cognito app client
+(client credentials) behind an **AgentCore Identity** credential provider. It never approves with
+Rita's token, and no person's token carries that scope. To add a case, add an entry
 to `CASES` and a registry page `infra/registry_page/<company number>.html`, then deploy.
 
 ![Low risk: approved by the agent](docs/screenshots/13-engineering-autonomous-low-risk.png)

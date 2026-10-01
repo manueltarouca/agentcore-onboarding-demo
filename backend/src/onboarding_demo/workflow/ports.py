@@ -115,6 +115,12 @@ class RegistryUnavailable(Exception):
     """The account does not allow AWS Agent Registry (for example a restricted sandbox account)."""
 
 
+class AgentIdentity(Protocol):
+    """The agent's own identity (AgentCore Identity), used when the agent acts for itself."""
+
+    async def caller(self) -> Caller: ...
+
+
 class Registry(Protocol):
     async def publish(self, tool_name: str, description: str) -> RegistryEntry: ...
 
@@ -128,4 +134,5 @@ class Dependencies:
     sandbox: Sandbox
     evaluator: Evaluator
     registry: Registry
+    identity: AgentIdentity
     simulated: set[str] = field(default_factory=set)  # primitives that are not real AWS calls

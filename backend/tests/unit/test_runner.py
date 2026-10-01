@@ -50,7 +50,7 @@ def test_policy_denies_the_agent_approving_a_medium_risk_customer():
     events = run_until_approval(Workflow(LUSITANIA, fake_dependencies()))
 
     decision = of_type(events, "policy_decision")[0]
-    assert (decision["tool"], decision["decision"], decision["caller"]) == ("approve_customer", "DENY", "Rita Almeida")
+    assert (decision["tool"], decision["decision"], decision["caller"]) == ("approve_customer", "DENY", "Onboarding agent")
 
 
 def test_policy_allows_the_compliance_officer_to_approve():
@@ -125,8 +125,18 @@ def test_a_low_risk_case_is_approved_by_the_agent_without_a_human():
     events = asyncio.run(collect(Workflow(DOURO, fake_dependencies()).start(RITA)))
 
     decision = of_type(events, "policy_decision")[0]
-    assert (decision["tool"], decision["decision"], decision["caller"]) == ("approve_customer", "ALLOW", "Rita Almeida")
+    assert (decision["tool"], decision["decision"], decision["caller"]) == ("approve_customer", "ALLOW", "Onboarding agent")
     assert not of_type(events, "awaiting_approval")
     assert [e["step"] for e in of_type(events, "step_skipped")] == ["human_review"]
     assert [e["step"] for e in of_type(events, "step_completed")] == [s.id for s in STEPS if s.id != "human_review"]
     assert events[-1]["type"] == "run_completed"
+
+
+def test_the_agent_approves_with_its_own_identity_never_with_the_relationship_managers_token():
+    from onboarding_demo.case import DOURO
+
+    deps = fake_dependencies()
+    asyncio.run(collect(Workflow(DOURO, deps).start(RITA)))
+
+    approvals = [c for c in deps.tools.calls if c[0] == "approve_customer"]
+    assert [token for _, token in approvals] == ["agent-token"]

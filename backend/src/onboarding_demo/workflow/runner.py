@@ -222,8 +222,9 @@ class Workflow:
             f"{self._findings()}. Risk: {self.state['risk']}. Write one sentence for the compliance "
             "reviewer explaining the risk. Plain text."))
         arguments = {"case_id": self.case.case_id, "risk": self.state["risk"]}
+        agent = await self.deps.identity.caller()  # its own identity, not the relationship manager's
         try:  # the agent's default is to approve; Policy decides whether it may
-            await self._tool(step, "approve_customer", arguments, caller)
+            await self._tool(step, "approve_customer", arguments, agent)
             self.state["approved_by_agent"] = True
             return {"decision": "ALLOW", "summary": reply.text}
         except PolicyDenied as denied:

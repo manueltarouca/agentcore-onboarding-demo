@@ -29,7 +29,7 @@ Browser UI        Web app (FastAPI)       Cognito      AgentCore Runtime (agent)
     |                    |                    |                 | 3 Browser: read registry page                    |
     |                    |                    |                 | 4 Code Interpreter: run the model's script       |
     |                    |                    |                 | 5 tool calls as Rita ------->| Policy: ALLOW --->| screen_person x2
-    |                    |                    |                 | 6 approve as Rita ---------->| Policy: DENY      |
+    |                    |                    |                 | 6 approve as the agent ----->| Policy: DENY      |
     |                    |                    |                 |   compliance case as Rita -->| Policy: ALLOW --->| create_compliance_case
     |<== awaiting approval ===================================|  (workflow paused in the session's microVM)        |
     |                                                                                                              |
@@ -52,7 +52,7 @@ Browser UI        Web app (FastAPI)       Cognito      AgentCore Runtime (agent)
 | 3 | Registry page | Browser | A website with no API, read by a managed browser (screenshot in the UI) |
 | 4 | Ownership | Code Interpreter | The model writes the maths, a sandbox runs it, we check it against a tested reference |
 | 5 | Screening | Gateway | Only people are screened; Miguel Santos is a politically exposed person, risk medium |
-| 6 | Approval attempt | Policy | The agent tries to approve; Cedar says no for medium risk. The agent prepares, a person decides |
+| 6 | Approval attempt | Policy, Identity | The agent tries to approve with its own identity (AgentCore Identity token, scope `approve.low_risk`); Cedar says no for medium risk. The agent prepares, a person decides |
 | 7 | Human approval | Identity | Same tool, different person: Policy allows it for compliance.officer |
 | 8 | Long-term memory | Memory | Facts, preferences and lessons extracted for the next case |
 | 9 | Evaluation | Evaluations | An LLM judge scores the run from CloudWatch traces (it once caught a vague prompt) |

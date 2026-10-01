@@ -38,6 +38,8 @@ USERS = {
     **{case.client_username: "clients" for case in CASES.values()},
 }
 STAFF = '["rita.almeida", "compliance.officer"]'  # Cedar set: bank staff, never the client
+# The agent's own permission, as an OAuth scope on its own app client (not a person's username).
+AGENT_SCOPE = "onboarding/approve.low_risk"
 
 
 class OnboardingStack(Stack):
@@ -53,6 +55,28 @@ class OnboardingStack(Stack):
             "WebClient", user_pool_client_name=f"{PREFIX}-web",
             auth_flows=cognito.AuthFlow(user_password=True), generate_secret=False,
         )
+        # The agent's own identity: an app client with the client-credentials flow and one scope.
+        # A Cognito domain provides the token endpoint that AgentCore Identity calls.
+        resource_server = user_pool.add_resource_server(
+            "Api", identifier=AGENT_SCOPE.split("/")[0],
+            scopes=[cognito.ResourceServerScope(scope_name=AGENT_SCOPE.split("/")[1],
+                                                scope_description="Approve low-risk business customers")])
+        domain = user_pool.add_domain("Domain", cognito_domain=cognito.CognitoDomainOptions(
+            domain_prefix=f"{PREFIX}-agent-{self.account}"))
+        agent_client = user_pool.add_client(
+            "AgentClient", user_pool_client_name=f"{PREFIX}-agent", generate_secret=True,
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(client_credentials=True),
+                scopes=[cognito.OAuthScope.resource_server(resource_server, cognito.ResourceServerScope(
+                    scope_name=AGENT_SCOPE.split("/")[1], scope_description="Approve low-risk business customers"))]),
+        )
+        agent_identity = agentcore.OAuth2CredentialProvider.using_custom(
+            self, "AgentIdentity", o_auth2_credential_provider_name=f"{PREFIX}-agent-identity",
+            discovery_url=f"https://cognito-idp.{self.region}.amazonaws.com/{user_pool.user_pool_id}"
+                          "/.well-known/openid-configuration",
+            client_id=agent_client.user_pool_client_id, client_secret=agent_client.user_pool_client_secret,
+        )
+        agent_identity.node.add_dependency(domain)
         self._users_provider = self._users_custom_resource(user_pool)
         # One resource per group, named after its first user so existing stacks keep their resource ids.
         first_user = {group: username for username, group in reversed(list(USERS.items()))}
@@ -77,7 +101,7 @@ class OnboardingStack(Stack):
         gateway = agentcore.Gateway(
             self, "Gateway", gateway_name=f"{PREFIX}-gateway",
             authorizer_configuration=agentcore.GatewayAuthorizer.using_cognito(
-                user_pool=user_pool, allowed_clients=[client]),
+                user_pool=user_pool, allowed_clients=[client, agent_client]),
             policy_engine_configuration=agentcore.GatewayPolicyEngineConfig(
                 policy_engine=policy_engine, mode=agentcore.PolicyEngineMode.ENFORCE),
             exception_level=agentcore.GatewayExceptionLevel.DEBUG,
@@ -135,10 +159,13 @@ class OnboardingStack(Stack):
                 "EVALUATOR_IDS": EVALUATORS,
                 "REGISTRY_PAGE_URL": f"https://{distribution.distribution_domain_name}/",
                 "AWS_REGION": self.region,
+                "AGENT_IDENTITY_PROVIDER": f"{PREFIX}-agent-identity",
+                "AGENT_SCOPE": AGENT_SCOPE,
             },
             tracing_enabled=True,
         )
         self._grant_agent_permissions(runtime.role, memory)
+        runtime.node.add_dependency(agent_identity)
 
         # ---- Outputs used by the web app and the console links -------------------------
         outputs = {
@@ -208,11 +235,12 @@ class OnboardingStack(Stack):
              AgentCore::Action::"bank___book_callback"],
   resource == {gateway}
 );""",
+            # Only a caller whose token carries the agent's scope, and only for low risk.
             "approve_low_risk": f"""permit(
   principal is AgentCore::OAuthUser,
   action == AgentCore::Action::"bank___approve_customer",
   resource == {gateway}
-) when {{ context.input.risk == "low" && principal.hasTag("username") && {STAFF}.contains(principal.getTag("username")) }};""",
+) when {{ context.input.risk == "low" && principal.hasTag("scope") && principal.getTag("scope") like "*{AGENT_SCOPE}*" }};""",
             "approve_by_compliance": f"""permit(
   principal is AgentCore::OAuthUser,
   action == AgentCore::Action::"bank___approve_customer",
@@ -234,6 +262,10 @@ class OnboardingStack(Stack):
                              "logs:StartQuery", "logs:GetQueryResults", "logs:DescribeLogGroups"], ["*"]),
             "Registry": (["bedrock-agentcore:CreateRegistry", "bedrock-agentcore:ListRegistries",
                           "bedrock-agentcore:CreateRegistryRecord"], ["*"]),
+            "AgentIdentity": (["bedrock-agentcore:GetResourceOauth2Token", "bedrock-agentcore:GetWorkloadAccessToken",
+                               "bedrock-agentcore:GetWorkloadAccessTokenForJWT"], ["*"]),
+            "AgentIdentitySecret": (["secretsmanager:GetSecretValue"],
+                                    [f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:bedrock-agentcore-identity!*"]),
         }
         for sid, (actions, resources) in statements.items():
             role.add_to_principal_policy(iam.PolicyStatement(sid=sid, actions=actions, resources=resources))

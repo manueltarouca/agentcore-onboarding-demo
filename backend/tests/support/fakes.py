@@ -47,14 +47,18 @@ class FakeMemory:
 
 
 class FakeTools:
-    """Mirrors the Cedar policies on the Gateway (infra/stack.py)."""
+    """Mirrors the Cedar policies on the Gateway (infra/stack.py). Records (tool, token) per call."""
 
     STAFF_TOOLS = {"registry_lookup", "screen_person", "create_compliance_case"}
 
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+
     async def call(self, name: str, arguments: dict, caller: Caller) -> ToolResult:
-        staff = caller.role != "Client"
+        self.calls.append((name, caller.token))
+        staff = caller.role not in ("Client", "Agent")
         if name == "approve_customer":
-            allowed = caller.role == "Compliance" or (staff and arguments.get("risk") == "low")
+            allowed = caller.role == "Compliance" or (caller.role == "Agent" and arguments.get("risk") == "low")
         else:
             allowed = staff or name not in self.STAFF_TOOLS
         if not allowed:
@@ -121,8 +125,13 @@ class FakeRegistry:
         return RegistryEntry(name=tool_name, status="Approved", record_id="rec-demo-0001")
 
 
+class FakeAgentIdentity:
+    async def caller(self) -> Caller:
+        return Caller(name="Onboarding agent", role="Agent", token="agent-token", username="onboarding-agent")
+
+
 def fake_dependencies() -> Dependencies:
     return Dependencies(
         model=FakeModel(), memory=FakeMemory(), tools=FakeTools(), browser=FakeBrowser(),
-        sandbox=FakeSandbox(), evaluator=FakeEvaluator(), registry=FakeRegistry(),
+        sandbox=FakeSandbox(), evaluator=FakeEvaluator(), registry=FakeRegistry(), identity=FakeAgentIdentity(),
     )

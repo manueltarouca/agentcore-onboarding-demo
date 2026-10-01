@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { approve, getConfig, startRun, streamRun, type Config, type Mode } from "./api";
+import { approve, getConfig, startRun, streamRun, type CaseInfo, type Config, type Mode } from "./api";
 import { ClientView, useChat } from "./components/ClientView";
 import { ComplianceView } from "./components/ComplianceView";
 import { ObservabilityStrip } from "./components/ObservabilityStrip";
@@ -13,7 +13,8 @@ type Persona = "client" | "relationship_manager" | "compliance" | "engineering";
 
 export function App() {
   const [state, dispatch] = useReducer(runReducer, initialState);
-  const chat = useChat();
+  const [caseId, setCaseId] = useState("");
+  const chat = useChat(caseId);
   const [config, setConfig] = useState<Config | null>(null);
   const [persona, setPersona] = useState<Persona>("engineering");
   const [mode, setMode] = useState<Mode>("live");
@@ -27,7 +28,8 @@ export function App() {
   const elapsed = useElapsed(running);
 
   useEffect(() => {
-    getConfig().then(setConfig).catch(() => setError("Backend not reachable"));
+    getConfig().then((c) => { setConfig(c); setCaseId(c.cases[0]?.id ?? ""); })
+      .catch(() => setError("Backend not reachable"));
   }, []);
 
   async function run() {
@@ -35,7 +37,7 @@ export function App() {
     setError("");
     setPinned(null);
     try {
-      runId.current = await startRun(mode, speed);
+      runId.current = await startRun(mode, speed, caseId);
       elapsed.reset();
       stop.current = streamRun(runId.current, dispatch);
     } catch (e) {
@@ -44,6 +46,15 @@ export function App() {
   }
 
   const onApprove = () => runId.current && approve(runId.current);
+  const chooseCase = (id: string) => {
+    if (id === caseId) return;
+    stop.current();
+    dispatch({ type: "reset" });
+    chat.reset();
+    setPinned(null);
+    setCaseId(id);
+  };
+  const caseInfo: CaseInfo | undefined = config?.cases.find((c) => c.id === caseId);
   const links = config?.links ?? {};
   const diagramSteps = state.steps.length
     ? state.steps
@@ -66,6 +77,10 @@ export function App() {
           ))}
         </nav>
         <div className="controls">
+          <select className="case-picker" value={caseId} disabled={running} aria-label="Case"
+                  onChange={(e) => chooseCase(e.target.value)}>
+            {(config?.cases ?? []).map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
+          </select>
           <Segmented value={mode} options={["live", "replay"]} onChange={(v) => setMode(v as Mode)} />
           {mode === "replay" && (
             <Segmented value={String(speed)} options={["1", "2"]} labels={["1x", "2x"]} onChange={(v) => setSpeed(Number(v))} />
@@ -77,13 +92,14 @@ export function App() {
 
       {(error || state.status === "failed") && <div className="error">{error || state.error}</div>}
 
-      {persona === "client" && <main className="main-single"><ClientView state={state} chat={chat} /></main>}
-      {persona === "relationship_manager" && <main className="main-single"><RelationshipManagerView state={state} /></main>}
+      {persona === "client" && <main className="main-single"><ClientView state={state} chat={chat} caseInfo={caseInfo} /></main>}
+      {persona === "relationship_manager" && <main className="main-single"><RelationshipManagerView state={state} caseInfo={caseInfo} /></main>}
       {persona === "compliance" && <main className="main-single"><ComplianceView state={state} onApprove={onApprove} /></main>}
       {persona === "engineering" && (
         <main className="main">
           <div className="canvas">
             <WorkflowDiagram steps={diagramSteps} activeStep={state.activeStep} sessionId={state.sessionId}
+                             autonomous={state.details.approval?.decision === "ALLOW"}
                              waiting={state.status === "awaiting_approval"} selected={shownStep} onSelect={setPinned} />
           </div>
           <aside className="panel">

@@ -7,7 +7,8 @@ GET  /api/config               personas and AWS console links
 POST /api/chat                 one message from the client to the agent; returns what the agent did
 
 A live run is two invocations of the same Runtime session: first as the relationship
-manager, then, after approval, as the compliance officer.
+manager, then, after approval, as the compliance officer. A low-risk case is approved by the
+agent within Policy, so its run ends after the first invocation.
 """
 import asyncio
 import json
@@ -20,14 +21,14 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from onboarding_demo.case import CASES, DEFAULT_CASE, get_case
 from onboarding_demo.web.console_links import console_links
 from onboarding_demo.workflow.runner import describe_steps
 
 RELATIONSHIP_MANAGER = "rita.almeida"
 COMPLIANCE_OFFICER = "compliance.officer"
-CLIENT = "lusitania.client"
 PERSONAS = [
-    {"id": "client", "label": "Client", "user": "Lusitania Holdings SGPS"},
+    {"id": "client", "label": "Client", "user": ""},
     {"id": "relationship_manager", "label": "Relationship manager", "user": "Rita Almeida"},
     {"id": "compliance", "label": "Compliance officer", "user": "Compliance officer"},
     {"id": "engineering", "label": "Engineering", "user": ""},
@@ -47,18 +48,21 @@ class Auth(Protocol):
 class RunRequest(BaseModel):
     mode: Literal["live", "replay"] = "replay"
     speed: float = 1.0
+    case_id: str = DEFAULT_CASE.case_id
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
+    case_id: str = DEFAULT_CASE.case_id
 
 
 class Run:
     """One case run. Its events are kept, so a browser that reconnects can catch up."""
 
-    def __init__(self, mode: str, speed: float):
+    def __init__(self, mode: str, speed: float, case_id: str):
         self.mode = mode
+        self.case_id = case_id
         self.speed = max(speed, 0.1)
         self.session_id = f"onboarding-{uuid.uuid4().hex}"  # Runtime needs 33+ characters
         self.approved = asyncio.Event()
@@ -72,29 +76,39 @@ def create_app(runtime: Runtime, auth: Auth, outputs: dict, replay_file: Path, s
     app = FastAPI(title="Onboarding agent demo")
     runs: dict[str, Run] = {}
 
+    def recording(case_id: str) -> Path:
+        """Each case has its own recording. The first case may still have the older single file."""
+        per_case = replay_file.parent / f"replay-{case_id}.json"
+        if not per_case.exists() and case_id == DEFAULT_CASE.case_id and replay_file.exists():
+            return replay_file
+        return per_case
+
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok", "replay_available": replay_file.exists()}
 
     @app.get("/api/config")
     def config() -> dict:
-        return {"personas": PERSONAS, "steps": describe_steps(), "links": console_links(outputs),
-                "replay_available": replay_file.exists()}
+        cases = [{"id": c.case_id, "company": c.company, "client": c.client_username,
+                  "replay_available": recording(c.case_id).exists()} for c in CASES.values()]
+        return {"personas": PERSONAS, "steps": describe_steps(), "links": console_links(outputs), "cases": cases,
+                "replay_available": recording(DEFAULT_CASE.case_id).exists()}
 
     @app.post("/api/runs")
     def start_run(request: RunRequest) -> dict:
-        if request.mode == "replay" and not replay_file.exists():
-            raise HTTPException(404, "No recording yet. Run once in live mode.")
+        if request.mode == "replay" and not recording(request.case_id).exists():
+            raise HTTPException(404, "No recording of this case yet. Run it once in live mode.")
         run_id = uuid.uuid4().hex[:10]
-        runs[run_id] = Run(request.mode, request.speed)
+        runs[run_id] = Run(request.mode, request.speed, get_case(request.case_id).case_id)
         return {"run_id": run_id}
 
     @app.post("/api/chat")
     async def chat(request: ChatRequest) -> dict:
         """One chat turn, as the client. The Runtime session (and Memory session) is the conversation."""
         session_id = request.session_id or f"client-chat-{uuid.uuid4().hex}"
-        token = await auth.sign_in(CLIENT)
-        events = [e async for e in runtime.invoke(token, session_id, {"action": "chat", "message": request.message})]
+        token = await auth.sign_in(get_case(request.case_id).client_username)
+        payload = {"action": "chat", "message": request.message, "case_id": request.case_id}
+        events = [e async for e in runtime.invoke(token, session_id, payload)]
         return {"session_id": session_id, "events": events}
 
     @app.post("/api/runs/{run_id}/approve", status_code=204)
@@ -147,23 +161,23 @@ def create_app(runtime: Runtime, auth: Auth, outputs: dict, replay_file: Path, s
     async def live(run: Run):
         recorded = []
         token = await auth.sign_in(RELATIONSHIP_MANAGER)
-        async for e in runtime.invoke(token, run.session_id, {"action": "start"}):
+        async for e in runtime.invoke(token, run.session_id, {"action": "start", "case_id": run.case_id}):
             recorded.append(e)
             yield e
-        if recorded and recorded[-1]["type"] != "awaiting_approval":
-            return  # the first invocation failed; nothing to approve
-        await run.approved.wait()
-        token = await auth.sign_in(COMPLIANCE_OFFICER)
-        async for e in runtime.invoke(token, run.session_id, {"action": "approve"}):
-            recorded.append(e)
-            yield e
-        if recorded[-1]["type"] == "run_completed":
-            replay_file.parent.mkdir(parents=True, exist_ok=True)
-            replay_file.write_text(json.dumps(recorded, indent=1))
+        if recorded and recorded[-1]["type"] == "awaiting_approval":  # a person must decide
+            await run.approved.wait()
+            token = await auth.sign_in(COMPLIANCE_OFFICER)
+            async for e in runtime.invoke(token, run.session_id, {"action": "approve"}):
+                recorded.append(e)
+                yield e
+        if recorded and recorded[-1]["type"] == "run_completed":
+            path = replay_file.parent / f"replay-{run.case_id}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(recorded, indent=1))
 
     async def replay(run: Run):
         previous = None
-        for e in json.loads(replay_file.read_text()):
+        for e in json.loads(recording(run.case_id).read_text()):
             if previous is not None:
                 gap = min(max(e["at"] - previous, REPLAY_MIN_GAP_MS), REPLAY_MAX_GAP_MS)
                 await asyncio.sleep(gap / 1000 / run.speed)

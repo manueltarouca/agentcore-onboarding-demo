@@ -3,14 +3,21 @@
 The same functions run inside the Lambda behind AgentCore Gateway (see infra/) and in
 the fake gateway used by tests, so both behave the same way.
 """
+from onboarding_demo.case import CASES
+from onboarding_demo.domain.documents import missing_documents
+
+REGISTRY_DETAILS = {
+    "500000000": {"legal_form": "SGPS (holding company)", "registered_office": "Lisbon", "status": "Active",
+                  "incorporated": "2011-03-14"},
+    "500000001": {"legal_form": "Lda (private limited company)", "registered_office": "Porto", "status": "Active",
+                  "incorporated": "2016-09-02"},
+}
+
 COMPANIES = {
-    "500000000": {
-        "name": "Lusitania Holdings SGPS",
-        "legal_form": "SGPS (holding company)",
-        "registered_office": "Lisbon",
-        "status": "Active",
-        "incorporated": "2011-03-14",
+    case.company_number: {
+        "name": case.company, **REGISTRY_DETAILS.get(case.company_number, {})
     }
+    for case in CASES.values()
 }
 
 PEP_LIST = {"Miguel Santos": "Former member of a municipal executive"}
@@ -44,12 +51,13 @@ def approve_customer(case_id: str, risk: str) -> dict:
 # What the client may see about their own case. Status and requests only: never the
 # screening results or the risk (telling a customer they are under suspicion is "tipping off").
 CLIENT_CASES = {
-    "CASE-2026-0142": {
-        "company": "Lusitania Holdings SGPS",
+    case.case_id: {
+        "company": case.company,
         "stage": "Under review",
-        "documents_needed": ["Beneficial owner declaration", "Manager ID documents"],
-        "relationship_manager": "Rita Almeida",
+        "documents_needed": missing_documents(list(case.documents_received)),
+        "relationship_manager": case.relationship_manager,
     }
+    for case in CASES.values()
 }
 
 

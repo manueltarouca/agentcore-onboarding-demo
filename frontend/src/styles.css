@@ -321,3 +321,9 @@ button.primary-waiting { background: var(--amber); }
 .activity-footnote { margin-top: auto; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.node-skipped rect { stroke-dasharray: 5 4; opacity: 0.6; }
+.node-skipped .node-label { fill: var(--muted); }
+.flag-skipped { fill: var(--muted); }
+.status-skipped { color: var(--muted); }
+.case-picker { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; }

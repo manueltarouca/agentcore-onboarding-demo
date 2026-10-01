@@ -117,3 +117,16 @@ def test_the_agent_writes_a_risk_summary_for_the_reviewer_with_the_findings():
     assert approval["detail"]["summary"]
     prompt = deps.model.prompts[-1]
     assert "Miguel Santos" in prompt and "politically exposed" in prompt and "medium" in prompt
+
+
+def test_a_low_risk_case_is_approved_by_the_agent_without_a_human():
+    from onboarding_demo.case import DOURO
+
+    events = asyncio.run(collect(Workflow(DOURO, fake_dependencies()).start(RITA)))
+
+    decision = of_type(events, "policy_decision")[0]
+    assert (decision["tool"], decision["decision"], decision["caller"]) == ("approve_customer", "ALLOW", "Rita Almeida")
+    assert not of_type(events, "awaiting_approval")
+    assert [e["step"] for e in of_type(events, "step_skipped")] == ["human_review"]
+    assert [e["step"] for e in of_type(events, "step_completed")] == [s.id for s in STEPS if s.id != "human_review"]
+    assert events[-1]["type"] == "run_completed"

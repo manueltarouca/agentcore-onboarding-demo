@@ -127,3 +127,39 @@ def test_chat_signs_in_as_the_client_and_keeps_one_session_per_conversation(tmp_
     assert runtime.calls[0][0] == "token-for-lusitania.client"
     assert runtime.calls[1][1] == first["session_id"] == second["session_id"]
     assert len(first["session_id"]) >= 33
+
+
+class AutonomousRuntime(FakeRuntime):
+    async def invoke(self, token: str, session_id: str, payload: dict):
+        self.calls.append((token, session_id, payload["action"], payload.get("case_id")))
+        yield {"type": "run_started", "at": 0, "steps": []}
+        yield {"type": "run_completed", "at": 1, "totals": {}}
+
+
+def test_config_lists_the_cases_to_choose_from(tmp_path):
+    client, _ = make_client(tmp_path)
+
+    cases = client.get("/api/config").json()["cases"]
+
+    assert {c["id"] for c in cases} >= {"CASE-2026-0142", "CASE-2026-0143"}
+    assert all({"company", "client"} <= c.keys() for c in cases)
+
+
+def test_a_low_risk_run_finishes_in_one_invocation_and_is_recorded_per_case(tmp_path):
+    client, runtime = make_client(tmp_path, AutonomousRuntime())
+
+    run_id = client.post("/api/runs", json={"mode": "live", "case_id": "CASE-2026-0143"}).json()["run_id"]
+    with client.stream("GET", f"/api/runs/{run_id}/events") as stream:
+        kinds = [json.loads(l.removeprefix("data: "))["type"] for l in stream.iter_lines() if l.startswith("data: ")]
+
+    assert kinds[-1] == "run_completed"
+    assert runtime.calls == [(runtime.calls[0][0], runtime.calls[0][1], "start", "CASE-2026-0143")]
+    assert (tmp_path / "replay-CASE-2026-0143.json").exists()
+
+
+def test_chat_signs_in_as_the_client_of_the_chosen_case(tmp_path):
+    client, runtime = make_client(tmp_path, ChatRuntime())
+
+    client.post("/api/chat", json={"message": "Hi", "case_id": "CASE-2026-0143"})
+
+    assert runtime.calls[0][0] == "token-for-douro.client"

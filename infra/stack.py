@@ -7,6 +7,7 @@
     Runtime            hosts the agent (built from backend/Dockerfile)
     S3 + CloudFront    a public "registry" web page the agent reads with Browser
 """
+import sys
 from pathlib import Path
 
 from aws_cdk import (
@@ -25,13 +26,16 @@ from aws_cdk import (
 from constructs import Construct
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "backend" / "src"))  # the case catalogue is shared with the agent
+from onboarding_demo.case import CASES  # noqa: E402
+
 PREFIX = "onboarding"
 MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 EVALUATORS = "Builtin.GoalSuccessRate,Builtin.Helpfulness"
 USERS = {
     "rita.almeida": "relationship-managers",
     "compliance.officer": "compliance",
-    "lusitania.client": "clients",
+    **{case.client_username: "clients" for case in CASES.values()},
 }
 STAFF = '["rita.almeida", "compliance.officer"]'  # Cedar set: bank staff, never the client
 
@@ -50,9 +54,14 @@ class OnboardingStack(Stack):
             auth_flows=cognito.AuthFlow(user_password=True), generate_secret=False,
         )
         self._users_provider = self._users_custom_resource(user_pool)
+        # One resource per group, named after its first user so existing stacks keep their resource ids.
+        first_user = {group: username for username, group in reversed(list(USERS.items()))}
+        groups = {group: cognito.CfnUserPoolGroup(self, f"Group-{username.replace('.', '-')}",
+                                                  user_pool_id=user_pool.user_pool_id, group_name=group)
+                  for group, username in first_user.items()}
         passwords = {}
         for username, group in USERS.items():
-            passwords[username] = self._demo_user(user_pool, username, group)
+            passwords[username] = self._demo_user(user_pool, username, groups[group])
 
         # ---- The bank's systems (outside AgentCore), as a Lambda ------------------------
         tools_function = lambda_.Function(
@@ -101,7 +110,7 @@ class OnboardingStack(Stack):
         # ---- Third-party registry website (read by Browser) ------------------------------
         site_bucket = s3.Bucket(self, "RegistrySite", removal_policy=RemovalPolicy.DESTROY, auto_delete_objects=True)
         distribution = cloudfront.Distribution(
-            self, "RegistrySiteCdn", default_root_object="index.html",
+            self, "RegistrySiteCdn",  # one page per company: <company number>.html
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3BucketOrigin.with_origin_access_control(site_bucket)),
         )
@@ -150,7 +159,8 @@ class OnboardingStack(Stack):
         for key, value in outputs.items():
             CfnOutput(self, key, value=value)
 
-    def _demo_user(self, user_pool: cognito.UserPool, username: str, group: str) -> secretsmanager.Secret:
+    def _demo_user(self, user_pool: cognito.UserPool, username: str,
+                   group: cognito.CfnUserPoolGroup) -> secretsmanager.Secret:
         """A Cognito user with a generated password kept in Secrets Manager."""
         key = username.replace(".", "-")
         secret = secretsmanager.Secret(
@@ -160,14 +170,12 @@ class OnboardingStack(Stack):
                 exclude_characters="\"'\\/@` "),
             removal_policy=RemovalPolicy.DESTROY,
         )
-        group_resource = cognito.CfnUserPoolGroup(self, f"Group-{key}", user_pool_id=user_pool.user_pool_id,
-                                                  group_name=group)
         secret.grant_read(self._users_provider.on_event_handler)
         user = CustomResource(self, f"User-{key}", service_token=self._users_provider.service_token, properties={
-            "UserPoolId": user_pool.user_pool_id, "Username": username, "Group": group,
+            "UserPoolId": user_pool.user_pool_id, "Username": username, "Group": group.group_name,
             "PasswordSecret": secret.secret_name,
         })
-        user.node.add_dependency(group_resource)
+        user.node.add_dependency(group)
         user.node.add_dependency(secret)
         return secret
 

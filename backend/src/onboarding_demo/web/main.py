@@ -5,6 +5,7 @@ from pathlib import Path
 
 import uvicorn
 
+from onboarding_demo.case import CASES
 from onboarding_demo.web.api import create_app
 from onboarding_demo.web.aws import CognitoAuth, RuntimeClient
 
@@ -14,9 +15,8 @@ region = outputs["Region"]
 
 runtime = RuntimeClient(region, outputs["RuntimeArn"])
 auth = CognitoAuth(region, outputs["UserPoolClientId"], {
-    "rita.almeida": outputs["PasswordSecretRita"],
-    "compliance.officer": outputs["PasswordSecretCompliance"],
-    "lusitania.client": outputs["PasswordSecretLusitania"],
+    username: f"onboarding/{username}"  # Secrets Manager names set by infra/stack.py
+    for username in ["rita.almeida", "compliance.officer", *(case.client_username for case in CASES.values())]
 })
 app = create_app(
     runtime=runtime,

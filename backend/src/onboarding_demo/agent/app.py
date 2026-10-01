@@ -2,12 +2,13 @@
 
 Two actions, both in the same Runtime session:
 
-    {"action": "start"}    as the relationship manager: steps 1 to 6, then waits
-    {"action": "approve"}  as the compliance officer: steps 7 to 10
+    {"action": "start", "case_id": "..."}   as the relationship manager: steps 1 to 6, then waits
+                                             (a low-risk case is approved by the agent and finishes here)
+    {"action": "approve"}                   as the compliance officer: steps 7 to 10
 
 And one for the client's chat, one message per call:
 
-    {"action": "chat", "message": "..."}   as the client; the conversation lives in Memory
+    {"action": "chat", "message": "..."}    as the client of one case; the conversation lives in Memory
 
 Between the two calls the workflow object stays in this process. AgentCore Runtime keeps
 each session in its own microVM, so the second call lands where the first one left off.
@@ -19,7 +20,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp, RequestContext
 
 from onboarding_demo.adapters.aws import aws_dependencies, client_chat
 from onboarding_demo.agent.identity import caller_from_headers
-from onboarding_demo.case import LUSITANIA
+from onboarding_demo.case import case_for_client, get_case
 from onboarding_demo.workflow.events import event
 from onboarding_demo.workflow.runner import Workflow
 
@@ -33,8 +34,9 @@ async def invoke(payload: dict, context: RequestContext):
         caller = caller_from_headers(context.request_headers or {})
         action = payload.get("action")
         if action == "start":
-            case = dataclasses.replace(LUSITANIA, registry_page_url=os.environ["REGISTRY_PAGE_URL"])
-            workflow = Workflow(case, aws_dependencies(actor_id=caller.username), session_id=context.session_id)
+            case = get_case(payload.get("case_id"))
+            case = dataclasses.replace(case, registry_page_url=os.environ["REGISTRY_PAGE_URL"].rstrip("/") + "/" + case.registry_page)
+            workflow = Workflow(case, aws_dependencies(caller.username, case.conversation), session_id=context.session_id)
             workflows[context.session_id] = workflow
             async for e in workflow.start(caller):
                 yield e
@@ -46,7 +48,7 @@ async def invoke(payload: dict, context: RequestContext):
             async for e in workflow.approve(caller):
                 yield e
         elif action == "chat":
-            chat = client_chat(actor_id=caller.username, case_id=LUSITANIA.case_id)
+            chat = client_chat(actor_id=caller.username, case_id=case_for_client(caller.username).case_id)
             async for e in chat.reply(caller, context.session_id, payload.get("message", "")):
                 yield e
         else:

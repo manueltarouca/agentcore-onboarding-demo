@@ -86,6 +86,7 @@ function renderBody(stepId: string, detail: Detail, state: RunState, onApprove: 
     case "approval":
       return <Approval state={state} detail={detail} decisionStep="approval" />;
     case "human_review":
+      if (detail.skipped) return <p className="muted">Not needed. {detail.reason}, within policy.</p>;
       return state.status === "awaiting_approval" ? (
         <>
           <p className="muted">Medium risk. A compliance officer decides.</p>

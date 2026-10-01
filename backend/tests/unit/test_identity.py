@@ -32,3 +32,9 @@ def test_a_client_is_never_treated_as_bank_staff():
     caller = caller_from_headers({"Authorization": f"Bearer {access}"})
 
     assert (caller.name, caller.role) == ("Lusitania Holdings SGPS", "Client")
+
+
+def test_client_display_names_come_from_the_case_catalogue():
+    access = token({"username": "douro.client", "cognito:groups": ["clients"]})
+
+    assert caller_from_headers({"Authorization": f"Bearer {access}"}).name == "Douro Ceramics Lda"

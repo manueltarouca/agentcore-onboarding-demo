@@ -86,6 +86,13 @@ export function runReducer(state: RunState, event: RunEvent): RunState {
         steps: event.decision === "DENY" ? setStatus(state, event.step, "blocked") : state.steps,
       };
 
+    case "step_skipped":
+      return { ...state, steps: setStatus(state, event.step, "skipped"),
+               details: { ...state.details, [event.step]: { skipped: true, reason: event.reason } } };
+
+    case "reset":
+      return initialState;
+
     case "awaiting_approval":
       return { ...state, status: "awaiting_approval", steps: setStatus(state, event.step, "waiting") };
 

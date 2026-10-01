@@ -9,14 +9,16 @@ type Props = {
   activeStep: string | null;
   sessionId: string;
   waiting: boolean;
+  autonomous: boolean;
   selected: string | null;
   onSelect: (stepId: string) => void;
 };
 
-const FLAG: Partial<Record<StepStatus, string>> = { blocked: "DENIED", waiting: "WAITING" };
+const FLAG: Partial<Record<StepStatus, string>> = { blocked: "DENIED", waiting: "WAITING", skipped: "SKIPPED" };
 const LANES = ["Invocation 1  ·  as Rita Almeida, relationship manager", "Invocation 2  ·  as compliance officer"];
+const AUTONOMOUS_LANES = [LANES[0], "Still invocation 1  ·  low risk, no human step"];
 
-export function WorkflowDiagram({ steps, activeStep, sessionId, waiting, selected, onSelect }: Props) {
+export function WorkflowDiagram({ steps, activeStep, sessionId, waiting, autonomous, selected, onSelect }: Props) {
   const invocations = steps.map((s) => s.invocation);
   const position = (i: number) => nodePosition(i, invocations);
   const packet = usePacket(steps, activeStep, position);
@@ -36,7 +38,7 @@ export function WorkflowDiagram({ steps, activeStep, sessionId, waiting, selecte
       <text className="runtime-label" x="36" y="44">
         AgentCore Runtime{sessionId ? `  ·  session ${sessionId}` : ""}
       </text>
-      {LANES.map((label, lane) => (
+      {(autonomous ? AUTONOMOUS_LANES : LANES).map((label, lane) => (
         <text key={label} className="lane-label" x="56" y={laneLabelY(lane)}>{label}</text>
       ))}
 
@@ -46,10 +48,10 @@ export function WorkflowDiagram({ steps, activeStep, sessionId, waiting, selecte
       ))}
 
       {handoff && (
-        <g className={`handoff ${waiting ? "handoff-waiting" : approved ? "handoff-done" : ""}`}
+        <g className={`handoff ${waiting ? "handoff-waiting" : approved || autonomous ? "handoff-done" : ""}`}
            transform={`translate(${handoff.x} ${handoff.y})`}>
           <rect x="-104" y="-15" width="208" height="30" rx="15" />
-          <text textAnchor="middle" y="5">{waiting ? "Waiting for compliance" : approved ? "Approved by a human" : "Human decision"}</text>
+          <text textAnchor="middle" y="5">{waiting ? "Waiting for compliance" : autonomous ? "Approved by the agent" : approved ? "Approved by a human" : "Human decision"}</text>
         </g>
       )}
 

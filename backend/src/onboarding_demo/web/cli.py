@@ -3,6 +3,7 @@
     uv run python -m onboarding_demo.web.cli            # start as Rita, approve as compliance
     uv run python -m onboarding_demo.web.cli --start-only
     uv run python -m onboarding_demo.web.cli --details      # also print what each step returned
+    uv run python -m onboarding_demo.web.cli --case CASE-2026-0143   # another case from case.py
 """
 import asyncio
 import json
@@ -10,6 +11,7 @@ import sys
 import time
 import uuid
 
+from onboarding_demo.case import DEFAULT_CASE
 from onboarding_demo.web import main
 
 
@@ -23,16 +25,18 @@ def describe(e: dict) -> str:
     return str(e.get("step") or e.get("message") or e.get("totals") or "")
 
 
-async def run(start_only: bool) -> None:
+async def run(start_only: bool, case_id: str) -> None:
     session = f"onboarding-{uuid.uuid4().hex}"
     events = []
     started = time.time()
     for username, action in [("rita.almeida", "start"), ("compliance.officer", "approve")]:
         if action == "approve" and start_only:
             break
+        if action == "approve" and events and events[-1].get("type") == "run_completed":
+            break  # low risk: the agent approved within Policy, no human step
         token = await main.auth.sign_in(username)
         print(f"--- {action} as {username}")
-        async for e in main.runtime.invoke(token, session, {"action": action}):
+        async for e in main.runtime.invoke(token, session, {"action": action, "case_id": case_id}):
             events.append(e)
             print(f"{time.time() - started:6.1f}s  {e.get('type', 'raw'):18} {describe(e)[:150]}", flush=True)
     print("session", session)
@@ -44,4 +48,5 @@ async def run(start_only: bool) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run("--start-only" in sys.argv))
+    case = sys.argv[sys.argv.index("--case") + 1] if "--case" in sys.argv else DEFAULT_CASE.case_id
+    asyncio.run(run("--start-only" in sys.argv, case))

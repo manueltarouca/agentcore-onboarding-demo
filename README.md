@@ -22,6 +22,22 @@ Every step uses one AgentCore primitive, end to end, in your own AWS account.
 The agent runs on **AgentCore Runtime**. All model and tool calls are traced with
 **AgentCore Observability**.
 
+## Two cases, two outcomes
+
+Pick the case at the top of the app. The cases live in `backend/src/onboarding_demo/case.py`;
+everything else (agent, bank tools, chat, web app, UI, infrastructure) reads them from there.
+
+| Case | Owners | Risk | What happens |
+|---|---|---|---|
+| Lusitania Holdings SGPS | One owner, through a holding company, is a politically exposed person | Medium | Policy denies the agent's approval; a compliance officer decides in a second invocation |
+| Douro Ceramics Lda | Two people, both clear | Low | Policy allows the agent's approval; the run finishes in one invocation, no human step |
+
+The rule that makes the difference is one Cedar policy, `approve_low_risk` in `infra/stack.py`:
+the agent may approve when `risk == "low"` and it acts for bank staff. To add a case, add an entry
+to `CASES` and a registry page `infra/registry_page/<company number>.html`, then deploy.
+
+![Low risk: approved by the agent](docs/screenshots/13-engineering-autonomous-low-risk.png)
+
 ## The client's chat
 
 The Client tab also has a chat assistant. Each message is one call to the same Runtime, as the

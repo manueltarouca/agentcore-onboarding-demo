@@ -4,11 +4,11 @@ import type { RunEvent } from "./types";
 
 export type Mode = "live" | "replay";
 
-export async function startRun(mode: Mode, speed: number): Promise<string> {
+export async function startRun(mode: Mode, speed: number, caseId: string): Promise<string> {
   const response = await fetch("api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode, speed }),
+    body: JSON.stringify({ mode, speed, case_id: caseId }),
   });
   if (!response.ok) throw new Error(`Could not start run (${response.status})`);
   return (await response.json()).run_id;
@@ -34,8 +34,11 @@ export type Config = {
   personas: { id: string; label: string; user: string }[];
   steps: import("./types").StepInfo[];
   links: Record<string, string>;
+  cases: CaseInfo[];
   replay_available: boolean;
 };
+
+export type CaseInfo = { id: string; company: string; client: string; replay_available: boolean };
 
 export async function getConfig(): Promise<Config> {
   return (await fetch("api/config")).json();
@@ -43,11 +46,11 @@ export async function getConfig(): Promise<Config> {
 
 export type ChatTurn = { session_id: string; events: import("./state/chatActivity").ChatEvent[] };
 
-export async function sendChat(message: string, sessionId: string | null): Promise<ChatTurn> {
+export async function sendChat(message: string, sessionId: string | null, caseId: string): Promise<ChatTurn> {
   const response = await fetch("api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId, case_id: caseId }),
   });
   if (!response.ok) throw new Error(`Chat failed (${response.status})`);
   return response.json();

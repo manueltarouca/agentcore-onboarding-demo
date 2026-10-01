@@ -14,8 +14,10 @@ export type RunEvent =
   | { type: "usage"; at: number; step: string; model_id: string; input_tokens: number;
       output_tokens: number; latency_ms: number; cost_usd: number }
   | { type: "awaiting_approval"; at: number; step: string; reason: string }
+  | { type: "step_skipped"; at: number; step: string; reason: string }
+  | { type: "reset" }
   | { type: "memory_record"; at: number; step: string; strategy: string; text: string }
   | { type: "error"; at: number; message: string }
   | { type: "run_completed"; at: number; totals: { tokens: number; cost_usd: number; tool_calls: number } };
 
-export type StepStatus = "pending" | "active" | "done" | "blocked" | "waiting";
+export type StepStatus = "pending" | "active" | "done" | "blocked" | "waiting" | "skipped";

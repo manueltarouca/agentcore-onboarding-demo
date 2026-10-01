@@ -1,7 +1,7 @@
 // What the company applying sees: a customer portal, outside the bank, with a chat assistant.
 // Next to it, what the agent did for each message: Memory, Gateway, Policy, Model.
 import { useEffect, useRef, useState } from "react";
-import { sendChat } from "../api";
+import { sendChat, type CaseInfo } from "../api";
 import { activityRows, type ChatEvent } from "../state/chatActivity";
 import { clientView } from "../state/clientView";
 import type { RunState } from "../state/runReducer";
@@ -12,7 +12,7 @@ export type Chat = ReturnType<typeof useChat>;
 const SUGGESTIONS = ["What do you still need from us?", "Can you just approve our account today?",
                      "Book a call with my relationship manager about the documents"];
 
-export function useChat() {
+export function useChat(caseId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function useChat() {
     setBusy(true);
     setMessages((m) => [...m, { role: "user", text }]);
     try {
-      const turn = await sendChat(text, sessionId);
+      const turn = await sendChat(text, sessionId, caseId);
       setSessionId(turn.session_id);
       const failure = turn.events.find((e) => e.type === "error");
       const reply = turn.events.find((e) => e.type === "chat_reply");
@@ -40,7 +40,7 @@ export function useChat() {
   return { messages, sessionId, busy, error, send, reset: () => { setMessages([]); setSessionId(null); } };
 }
 
-export function ClientView({ state, chat }: { state: RunState; chat: Chat }) {
+export function ClientView({ state, chat, caseInfo }: { state: RunState; chat: Chat; caseInfo?: CaseInfo }) {
   const view = clientView(state);
   const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
@@ -57,13 +57,13 @@ export function ClientView({ state, chat }: { state: RunState; chat: Chat }) {
       <div className="portal-window portal-chat">
         <header className="portal-header">
           <span className="portal-brand">Business banking</span>
-          <span className="portal-user">{state.company || "Lusitania Holdings SGPS"}</span>
+          <span className="portal-user">{caseInfo?.company}</span>
         </header>
         <div className="portal-status">
           <div>
             <p className="portal-eyebrow">Business account application</p>
             <h2 className={`portal-headline-small portal-${view.stage}`}>
-              {view.stage === "not_started" ? "CASE-2026-0142" : view.headline}
+              {view.stage === "not_started" ? caseInfo?.id : view.headline}
             </h2>
           </div>
           {view.documentsNeeded.length > 0 && (

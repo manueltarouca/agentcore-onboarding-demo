@@ -100,3 +100,22 @@ describe("runReducer", () => {
     expect(state.steps[2].status).toBe("active");
   });
 });
+
+describe("a case the agent approves on its own", () => {
+  it("marks the human step as skipped and finishes", () => {
+    const state = play([
+      started,
+      { type: "policy_decision", at: 1, step: "approval", tool: "approve_customer", decision: "ALLOW",
+        reason: "", arguments: { risk: "low" }, caller: "Rita" },
+      { type: "step_completed", at: 2, step: "approval", detail: { decision: "ALLOW" } },
+      { type: "step_skipped", at: 3, step: "human_review", reason: "Risk low: approved by the agent" },
+      { type: "run_completed", at: 4, totals: { tokens: 1, cost_usd: 0, tool_calls: 1 } },
+    ]);
+    expect(state.steps.map((s) => s.status)).toEqual(["pending", "done", "skipped"]);
+    expect(state.status).toBe("completed");
+  });
+
+  it("starts clean when another case is chosen", () => {
+    expect(runReducer(play([started]), { type: "reset" })).toEqual(initialState);
+  });
+});

@@ -6,6 +6,9 @@ It runs in two invocations of the same AgentCore Runtime session:
 2. `approve(compliance_officer)` resumes the same workflow object, which is still in
    the session's memory, and runs steps 7 to 10.
 
+When Policy allows the agent's own approval (low risk), there is no human step: `start`
+skips step 7 and finishes the run in the first invocation.
+
 The steps always run in the same order so the class can follow them. Inside a step the
 model does the reasoning and the primitive does the work.
 """
@@ -89,11 +92,20 @@ class Workflow:
         )
         async for e in self._run_steps(FIRST_INVOCATION, caller):
             yield e
+        if self.state.get("approved_by_agent"):  # Policy allowed it: no human needed
+            yield event("step_skipped", step="human_review", reason=f"Risk {self.state['risk']}: approved by the agent")
+            async for e in self._finish(SECOND_INVOCATION[1:], caller):
+                yield e
+            return
         yield event("awaiting_approval", step="human_review", case_id=self.case.case_id,
                     reason=f"Risk {self.state['risk']}: a compliance officer must decide")
 
     async def approve(self, caller: Caller) -> AsyncIterator[dict]:
-        async for e in self._run_steps(SECOND_INVOCATION, caller):
+        async for e in self._finish(SECOND_INVOCATION, caller):
+            yield e
+
+    async def _finish(self, steps, caller: Caller) -> AsyncIterator[dict]:
+        async for e in self._run_steps(steps, caller):
             yield e
         yield event(
             "run_completed",
@@ -146,11 +158,13 @@ class Workflow:
     async def _intake(self, step: Step, caller: Caller) -> dict:
         turns = await self.deps.memory.conversation(self.session_id)
         missing = missing_documents(list(self.case.documents_received))
+        still = (f"Still missing: {', '.join(missing)}. Write a message to the relationship manager asking "
+                 "only for the missing documents." if missing else
+                 "Nothing is missing. Write a message to the relationship manager confirming the file is complete.")
         reply = await self._ask(
             step,
-            f"The customer already sent: {', '.join(self.case.documents_received)}. "
-            f"Still missing: {', '.join(missing)}. Write a message to the relationship manager asking "
-            "only for the missing documents. Plain text, at most two sentences, no greeting, no markdown.",
+            f"The customer already sent: {', '.join(self.case.documents_received)}. {still} "
+            "Plain text, at most two sentences, no greeting, no markdown.",
         )
         await self.deps.memory.save_turn(self.session_id, "assistant", reply.text)
         return {"remembered_turns": [t for _, t in turns], "missing": missing, "message": reply.text}
@@ -210,6 +224,7 @@ class Workflow:
         arguments = {"case_id": self.case.case_id, "risk": self.state["risk"]}
         try:  # the agent's default is to approve; Policy decides whether it may
             await self._tool(step, "approve_customer", arguments, caller)
+            self.state["approved_by_agent"] = True
             return {"decision": "ALLOW", "summary": reply.text}
         except PolicyDenied as denied:
             routed = await self._tool(step, "create_compliance_case",

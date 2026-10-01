@@ -12,6 +12,9 @@
 All four read the same stream of events from the agent. Each shows only what that person should see:
 telling a client they are under suspicion ("tipping off") is forbidden by anti-money-laundering rules.
 
+A low-risk case (Douro Ceramics Lda) takes a shorter path: at step 6 Policy allows the agent's
+approval, step 7 is skipped, and steps 8 to 10 run in the same first invocation.
+
 ## Sequence of events
 
 ```

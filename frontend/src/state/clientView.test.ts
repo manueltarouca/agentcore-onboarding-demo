@@ -47,3 +47,11 @@ describe("clientView", () => {
     expect(JSON.stringify(view)).not.toMatch(/compliance/i);
   });
 });
+
+describe("clientView, low risk", () => {
+  it("shows the application approved when the agent approved it within policy", () => {
+    const view = clientView(play([started, intake,
+      { type: "step_completed", at: 4, step: "approval", detail: { decision: "ALLOW" } }]));
+    expect(view.stage).toBe("approved");
+  });
+});

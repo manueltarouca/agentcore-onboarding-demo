@@ -30,7 +30,9 @@ export function ComplianceView({ state, onApprove }: { state: RunState; onApprov
       </aside>
 
       <section className="feed">
-        {!inQueue && <div className="empty">Cases appear here when the agent is not allowed to decide</div>}
+        {!inQueue && <div className="empty">{state.details.approval?.decision === "ALLOW"
+          ? "Nothing to review: low risk, approved by the agent within policy"
+          : "Cases appear here when the agent is not allowed to decide"}</div>}
         {inQueue && (
           <>
             {approved ? (

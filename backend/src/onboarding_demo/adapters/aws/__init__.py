@@ -21,7 +21,6 @@ from strands import Agent, tool
 from strands.models import BedrockModel
 
 from onboarding_demo.adapters.aws.naming import memory_actor_id
-from onboarding_demo.case import LUSITANIA
 from onboarding_demo.workflow.ports import (
     Caller, Dependencies, MemoryRecord, ModelReply, PageRead, PolicyDenied, RegistryEntry,
     RegistryUnavailable, SandboxRun, Score, ToolResult,
@@ -86,17 +85,17 @@ class AgentCoreMemory:
         "Episodic": "/onboarding/{actor}/episodes/",
     }
 
-    def __init__(self, memory_id: str, actor_id: str, seed: bool = True):
+    def __init__(self, memory_id: str, actor_id: str, seed: tuple[tuple[str, str], ...] = ()):
         self.client = MemoryClient(region_name=REGION)
         self.memory_id = memory_id
         self.actor_id = memory_actor_id(actor_id)
-        self.seed = seed  # the onboarding case starts from what the relationship manager already said
+        self.seed = seed  # a case starts from what the relationship manager already said
 
     async def conversation(self, session_id: str) -> list[tuple[str, str]]:
         events = await asyncio.to_thread(self.client.list_events, memory_id=self.memory_id,
                                          actor_id=self.actor_id, session_id=session_id)
         if not events and self.seed:  # first visit: store what the relationship manager already told us
-            for role, text in LUSITANIA.conversation:
+            for role, text in self.seed:
                 await self.save_turn(session_id, role, text)
             events = await asyncio.to_thread(self.client.list_events, memory_id=self.memory_id,
                                              actor_id=self.actor_id, session_id=session_id)
@@ -279,13 +278,13 @@ def runtime_log_group(runtime_name: str) -> str:
     raise RuntimeError(f"Runtime {runtime_name} not found")
 
 
-def aws_dependencies(actor_id: str) -> Dependencies:
+def aws_dependencies(actor_id: str, conversation: tuple[tuple[str, str], ...] = ()) -> Dependencies:
     gateway_url = env("GATEWAY_URL").rstrip("/")
     if not gateway_url.endswith("/mcp"):
         gateway_url += "/mcp"
     return Dependencies(
         model=StrandsModel(os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-6")),
-        memory=AgentCoreMemory(env("MEMORY_ID"), actor_id),
+        memory=AgentCoreMemory(env("MEMORY_ID"), actor_id, seed=conversation),
         tools=GatewayTools(gateway_url, env("GATEWAY_TARGET")),
         browser=AgentCoreBrowser(),
         sandbox=AgentCoreSandbox(),
@@ -302,7 +301,7 @@ def client_chat(actor_id: str, case_id: str):
         gateway_url += "/mcp"
     return ClientChat(
         model=StrandsChatModel(os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-6")),
-        memory=AgentCoreMemory(env("MEMORY_ID"), actor_id, seed=False),
+        memory=AgentCoreMemory(env("MEMORY_ID"), actor_id),
         tools=GatewayTools(gateway_url, env("GATEWAY_TARGET")),
         case_id=case_id,
     )

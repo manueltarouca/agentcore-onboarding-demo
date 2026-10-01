@@ -25,7 +25,7 @@ const COPY: Record<ClientStage, [string, string]> = {
 
 export function clientView(state: RunState): ClientView {
   const documentsChecked = Boolean(state.details.intake);
-  const approved = Boolean(state.details.human_review);
+  const approved = Boolean(state.details.human_review) || state.details.approval?.decision === "ALLOW";
   const stage: ClientStage =
     state.status === "idle" ? "not_started"
     : state.status === "failed" ? "delayed"

@@ -6,10 +6,11 @@ code runs, so here we only read its claims. The token itself is passed on to the
 import base64
 import json
 
+from onboarding_demo.case import CASES
 from onboarding_demo.workflow.ports import Caller
 
 DISPLAY_NAMES = {"rita.almeida": "Rita Almeida", "compliance.officer": "Compliance officer",
-                 "lusitania.client": "Lusitania Holdings SGPS"}
+                 **{case.client_username: case.company for case in CASES.values()}}
 COMPLIANCE_GROUP = "compliance"
 CLIENT_GROUP = "clients"
 

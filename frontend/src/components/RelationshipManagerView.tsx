@@ -1,5 +1,6 @@
 // What the relationship manager sees: her case, where it stands, and what the agent found.
 import { useState, type ReactNode } from "react";
+import type { CaseInfo } from "../api";
 import type { RunState } from "../state/runReducer";
 
 type Detail = Record<string, any>;
@@ -12,19 +13,20 @@ const STAGES = [
   { label: "Decision", steps: ["approval", "human_review"] },
 ];
 
-export function RelationshipManagerView({ state }: { state: RunState }) {
+export function RelationshipManagerView({ state, caseInfo }: { state: RunState; caseInfo?: CaseInfo }) {
   const [zoom, setZoom] = useState(false);
   const d = (id: string): Detail => state.details[id] ?? {};
   const status = caseStatus(state);
-  const decided = Boolean(state.details.human_review);
+  const decided = Boolean(state.details.human_review?.approved_by);
+  const approvedByAgent = d("approval").decision === "ALLOW";
   const sentToCompliance = state.details.approval?.decision === "DENY";
 
   return (
     <div className="persona">
       <aside className="case-card">
         <div className="field-label">Case</div>
-        <h2>{state.company || "Lusitania Holdings SGPS"}</h2>
-        <p className="muted mono">{state.caseId || "CASE-2026-0142"}</p>
+        <h2>{state.company || caseInfo?.company}</h2>
+        <p className="muted mono">{state.caseId || caseInfo?.id}</p>
         <div className="field-label">Owner</div>
         <p>Rita Almeida · Relationship manager</p>
         <div className="field-label">Status</div>
@@ -90,6 +92,11 @@ export function RelationshipManagerView({ state }: { state: RunState }) {
             <p className="muted">Medium risk needs a compliance officer. The agent prepared the case.</p>
           </Card>
         )}
+        {approvedByAgent && (
+          <Card title="Approved by the agent" tag="Decision" tone="done">
+            <p className="muted">Low risk: the agent approved it within policy. No human step needed.</p>
+          </Card>
+        )}
         {decided && (
           <Card title="Approved" tag="Decision" tone="done">
             <p>Approved by {d("human_review").approved_by}.</p>
@@ -145,7 +152,9 @@ function Card({ title, tag, tone, wide, children }: {
 
 function caseStatus(state: RunState) {
   if (state.status === "failed") return { label: "Error", tone: "blocked", detail: state.error };
-  if (state.details.human_review) return { label: "Approved", tone: "done", detail: "Account can be opened" };
+  if (state.details.human_review?.approved_by) return { label: "Approved", tone: "done", detail: "Account can be opened" };
+  if (state.details.approval?.decision === "ALLOW")
+    return { label: "Approved", tone: "done", detail: "Low risk: approved by the agent within policy" };
   if (state.details.approval?.decision === "DENY")
     return { label: "With compliance", tone: "waiting", detail: "Medium risk: a compliance officer decides" };
   if (state.status === "idle") return { label: "Not started", tone: "pending", detail: "" };
@@ -154,7 +163,7 @@ function caseStatus(state: RunState) {
 
 function stageStatus(state: RunState, steps: string[]) {
   const statuses = steps.map((id) => state.steps.find((s) => s.id === id)?.status ?? "pending");
-  if (statuses[statuses.length - 1] === "done") return "done";
+  if (statuses.includes("done") && statuses.every((s) => s === "done" || s === "skipped")) return "done";
   if (statuses.some((s) => s === "waiting" || s === "blocked")) return "waiting";
   if (statuses.some((s) => s !== "pending")) return "active";
   return "pending";
